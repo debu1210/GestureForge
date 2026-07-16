@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Shield, Sparkles, Palette, RefreshCw } from 'lucide-react';
+import { Shield, Sparkles, Palette, RefreshCw, Zap, Cpu, Camera, Layers } from 'lucide-react';
 
+// ==========================================
+// 1. TWO-HAND GESTURE ROTATION & SCALE MATHS
+// ==========================================
 class TwoHandTransformationEngine {
   constructor() {
     this.prevLeft = new THREE.Vector3();
@@ -15,7 +18,7 @@ class TwoHandTransformationEngine {
     this.deltaQuaternion = new THREE.Quaternion();
 
     this.isTrackingActive = false;
-    this.smoothingFactor = 0.2; // Smooths out webcam noise
+    this.smoothingFactor = 0.25; // Balanced smoothing to absorb web-cam tracking noise
     this.minDistanceThreshold = 0.05;
   }
 
@@ -25,9 +28,17 @@ class TwoHandTransformationEngine {
       return;
     }
 
-    // Mirror X coordinates for natural intuition when facing a camera
-    this.currentLeft.set((leftHandLandmark.x - 0.5) * -10, (leftHandLandmark.y - 0.5) * -6, leftHandLandmark.z * -5);
-    this.currentRight.set((rightHandLandmark.x - 0.5) * -10, (rightHandLandmark.y - 0.5) * -6, rightHandLandmark.z * -5);
+    // Mirror horizontal axes coordinates for clean, mirrored physical control response
+    this.currentLeft.set(
+      (leftHandLandmark.x - 0.5) * -10, 
+      (leftHandLandmark.y - 0.5) * -6, 
+      leftHandLandmark.z * -5
+    );
+    this.currentRight.set(
+      (rightHandLandmark.x - 0.5) * -10, 
+      (rightHandLandmark.y - 0.5) * -6, 
+      rightHandLandmark.z * -5
+    );
 
     if (!this.isTrackingActive) {
       this.prevLeft.copy(this.currentLeft);
@@ -36,6 +47,7 @@ class TwoHandTransformationEngine {
       return;
     }
 
+    // Measure relative distance delta to apply smooth spatial scale operations
     this.dirPrev.subVectors(this.prevRight, this.prevLeft);
     this.dirCurrent.subVectors(this.currentRight, this.currentLeft);
 
@@ -44,13 +56,17 @@ class TwoHandTransformationEngine {
 
     if (distPrev < this.minDistanceThreshold || distCurrent < this.minDistanceThreshold) return;
 
-    // 1. Uniform Spatial Scaling
+    // Apply Lerp-smoothed scale matrix updates
     const targetScaleMultiplier = distCurrent / distPrev;
-    const newScale = THREE.MathUtils.lerp(targetObject.scale.x, targetObject.scale.x * targetScaleMultiplier, this.smoothingFactor);
+    const newScale = THREE.MathUtils.lerp(
+      targetObject.scale.x, 
+      targetObject.scale.x * targetScaleMultiplier, 
+      this.smoothingFactor
+    );
     const clampedScale = THREE.MathUtils.clamp(newScale, 0.3, 4.0);
     targetObject.scale.set(clampedScale, clampedScale, clampedScale);
 
-    // 2. Quaternion Rotation Transformation
+    // Compute relative rotation angle adjustments (Dot and Cross products of hand vectors)
     this.dirPrev.normalize();
     this.dirCurrent.normalize();
 
@@ -67,7 +83,7 @@ class TwoHandTransformationEngine {
       targetObject.quaternion.premultiply(interpolationQuat);
     }
 
-    // Move state variables forward
+    // Cache variables forward
     this.prevLeft.copy(this.currentLeft);
     this.prevRight.copy(this.currentRight);
   }
@@ -77,6 +93,9 @@ class TwoHandTransformationEngine {
   }
 }
 
+// ==========================================
+// 2. WEBGL GRAPHICS AND DRAWING CONTEXT SYSTEM
+// ==========================================
 class Engine3D {
   constructor(canvas) {
     this.canvas = canvas;
@@ -100,7 +119,7 @@ class Engine3D {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-    // Futuristic Lights
+    // Futuristic space illumination config
     const ambientLight = new THREE.AmbientLight(0x1e1b4b, 0.8);
     this.scene.add(ambientLight);
 
@@ -108,7 +127,7 @@ class Engine3D {
     pointLight.position.set(0, 4, 4);
     this.scene.add(pointLight);
 
-    // Create central Holo-Cube Target
+    // Core Holo-Cube target configuration
     const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
     const wireframe = new THREE.WireframeGeometry(geometry);
     const material = new THREE.LineBasicMaterial({ color: 0x8b5cf6, linewidth: 2 });
@@ -116,12 +135,12 @@ class Engine3D {
     this.hologramObject = new THREE.LineSegments(wireframe, material);
     this.scene.add(this.hologramObject);
 
-    // Add a holographic floor grid reference
+    // Glowing grid array floor reference
     const gridHelper = new THREE.GridHelper(20, 20, 0x06b6d4, 0x1e293b);
     gridHelper.position.y = -2.5;
     this.scene.add(gridHelper);
 
-    window.addEventListener('resize', () => this.onWindowResize());
+    window.addEventListener('resize', this.onWindowResize.bind(this));
     this.animate();
   }
 
@@ -132,14 +151,14 @@ class Engine3D {
       return;
     }
 
-    // Two-Hand Transform Logic Mode
+    // Dual-hand coordinates tracking
     if (landmarksList.length === 2) {
       this.twoHandEngine.processTwoHandInteraction(landmarksList[0], landmarksList[1], this.hologramObject);
       this.currentLine = null; 
       return;
     }
 
-    // Single-Hand Spatial Pointer / Drawing Mode
+    // Single hand air-painting interaction
     if (landmarksList.length === 1) {
       this.twoHandEngine.resetTrackingState();
       
@@ -153,7 +172,6 @@ class Engine3D {
       const targetZ = indexTip.z * -5;
       const point = new THREE.Vector3(targetX, targetY, targetZ);
 
-      // Simple Gesture Detections
       const pinchDist = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
       const isDrawing = indexTip.y < middleTip.y && pinchDist > 0.08;
 
@@ -184,7 +202,6 @@ class Engine3D {
   }
 
   clearCanvas() {
-    // Traverse scene backwards to remove dynamic air lines safely
     for (let i = this.scene.children.length - 1; i >= 0; i--) {
       const child = this.scene.children[i];
       if (child instanceof THREE.Line && child !== this.hologramObject) {
@@ -194,32 +211,27 @@ class Engine3D {
   }
 
   onWindowResize() {
-    if (!this.camera || !this.renderer) return;
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
   animate() {
-    requestAnimationFrame(() => this.animate());
-    
-    // Constant diagnostic baseline spin for the central holographic cube
+    requestAnimationFrame(this.animate.bind(this));
     if (this.hologramObject) {
       this.hologramObject.rotation.y += 0.003;
     }
-
-    if (this.renderer && this.scene && this.camera) {
-      this.renderer.render(this.scene, this.camera);
-    }
+    this.renderer.render(this.scene, this.camera);
   }
 
   destroy() {
-    if (this.renderer) {
-      this.renderer.dispose();
-    }
+    this.renderer.dispose();
   }
 }
 
+// ==========================================
+// 3. FRONTEND STARK HUD INTERFACE MATRIX
+// ==========================================
 export default function GestureForgeWorkspace() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -227,6 +239,7 @@ export default function GestureForgeWorkspace() {
   
   const [hudStats, setHudStats] = useState({ activeHands: 0, status: 'INITIALIZING CAMERA...' });
   const [activeColor, setActiveColor] = useState('#00ffff');
+  const [isSystemReady, setIsSystemReady] = useState(false);
 
   const colorPalette = [
     { name: 'Cyan Neon', hex: '#00ffff', numeric: 0x00ffff },
@@ -236,21 +249,28 @@ export default function GestureForgeWorkspace() {
   ];
 
   useEffect(() => {
-    // Initialize our decoupled Three.js rendering engine
+    // A quick interval to wait for index.html CDN script tags to mount successfully globally
+    const checkLibraries = setInterval(() => {
+      if (window.Hands && window.Camera) {
+        setIsSystemReady(true);
+        clearInterval(checkLibraries);
+      }
+    }, 200);
+
+    return () => clearInterval(checkLibraries);
+  }, []);
+
+  useEffect(() => {
+    if (!isSystemReady) return;
+
     if (canvasRef.current && !engineRef.current) {
       engineRef.current = new Engine3D(canvasRef.current);
       engineRef.current.init();
-      setHudStats(p => ({ ...p, status: 'SYSTEM ACTIVE' }));
+      setHudStats(p => ({ ...p, status: 'SYSTEM READY' }));
     }
 
-    // Access the globally loaded MediaPipe classes from index.html
     const MediaPipeHands = window.Hands;
     const MediaPipeCamera = window.Camera;
-
-    if (!MediaPipeHands || !MediaPipeCamera) {
-      setHudStats(p => ({ ...p, status: 'ERROR: MEDIAPIPE NOT LOADED' }));
-      return;
-    }
 
     const hands = new MediaPipeHands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
@@ -268,7 +288,7 @@ export default function GestureForgeWorkspace() {
       setHudStats(prev => ({ 
         ...prev, 
         activeHands: trackingCount,
-        status: trackingCount === 2 ? 'TWIN COORD MATRIX ENGAGED' : trackingCount === 1 ? 'AIR DRAWING ACTIVE' : 'AWAITING TRACKING GESTURE'
+        status: trackingCount === 2 ? 'TWIN MATRIX ENGAGED' : trackingCount === 1 ? 'AIR GRAPHICS MODE' : 'AWAITING TRACKING TARGET'
       }));
       
       if (engineRef.current) {
@@ -292,7 +312,7 @@ export default function GestureForgeWorkspace() {
       cameraInstance?.stop();
       engineRef.current?.destroy();
     };
-  }, []);
+  }, [isSystemReady]);
 
   const handleColorChange = (hex, numeric) => {
     setActiveColor(hex);
@@ -304,26 +324,35 @@ export default function GestureForgeWorkspace() {
       {/* Hidden processing source stream anchor */}
       <video ref={videoRef} className="hidden" playsInline muted />
 
-      {/* Primary Interactive Render Viewport */}
+      {/* Primary WebGL Canvas Viewport */}
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-10" />
 
-      {/* Top Left: Main Diagnostic HUD Panel */}
-      <div className="absolute top-6 left-6 z-20 w-80 p-5 rounded-lg border border-cyan-500/30 bg-slate-900/70 backdrop-blur-md shadow-[0_0_25px_rgba(6,182,212,0.15)]">
-        <div className="flex items-center gap-2 mb-3 text-xs tracking-widest text-cyan-500 font-bold border-b border-cyan-500/20 pb-2">
+      {/* Left Interface Panel: Live HUD Diagnostics */}
+      <div className="absolute top-6 left-6 z-20 w-80 p-5 rounded-lg border border-cyan-500/30 bg-slate-950/80 backdrop-blur-md shadow-[0_0_25px_rgba(6,182,212,0.15)] flex flex-col gap-4">
+        <div className="flex items-center gap-2 text-xs tracking-widest text-cyan-500 font-bold border-b border-cyan-500/20 pb-2">
           <Shield className="w-4 h-4 animate-pulse" />
           <span>// GESTURE_FORGE_OS v1.0</span>
         </div>
-        <div className="space-y-2 text-xs text-slate-300">
-          <p className="flex justify-between">SYSTEM STATUS: <span className="text-white font-bold">{hudStats.status}</span></p>
-          <p className="flex justify-between">ACTIVE HAND ANCHORS: <span className="text-cyan-400 font-bold">{hudStats.activeHands} / 2</span></p>
-          <p className="flex justify-between">RENDER MATRIX: <span className="text-purple-400">WebGL 2.0 (Three.js)</span></p>
+        <div className="space-y-3 text-xs text-slate-300">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+            <span className="flex items-center gap-1.5 text-slate-400"><Cpu className="w-3.5 h-3.5 text-cyan-500" /> SYSTEM STATUS:</span>
+            <span className="text-white font-bold">{hudStats.status}</span>
+          </div>
+          <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+            <span className="flex items-center gap-1.5 text-slate-400"><Camera className="w-3.5 h-3.5 text-cyan-500" /> LIVE HANDS:</span>
+            <span className="text-cyan-400 font-bold">{hudStats.activeHands} / 2</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-slate-400"><Layers className="w-3.5 h-3.5 text-purple-500" /> GRAPHICS UNIT:</span>
+            <span className="text-purple-400">THREE_JS (WebGL 2.0)</span>
+          </div>
         </div>
       </div>
 
-      {/* Top Right: Color Controls Overlay */}
-      <div className="absolute top-6 right-6 z-20 p-4 rounded-lg border border-purple-500/30 bg-slate-900/70 backdrop-blur-md shadow-[0_0_25px_rgba(139,92,246,0.15)]">
+      {/* Right Interface Panel: Brush Coating Palette */}
+      <div className="absolute top-6 right-6 z-20 p-4 rounded-lg border border-purple-500/30 bg-slate-950/80 backdrop-blur-md shadow-[0_0_25px_rgba(139,92,246,0.15)]">
         <h3 className="text-xs font-bold text-purple-400 mb-3 flex items-center gap-2 tracking-wider">
-          <Palette className="w-4 h-4" /> NEON COATINGS
+          <Palette className="w-4 h-4" /> NEON BRUSH COATING
         </h3>
         <div className="flex flex-col gap-2">
           {colorPalette.map((color) => (
@@ -343,8 +372,8 @@ export default function GestureForgeWorkspace() {
         </div>
       </div>
 
-      {/* Bottom Center: System Action Array */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-6 p-4 bg-slate-900/80 backdrop-blur-xl border border-cyan-500/40 rounded-xl shadow-[0_0_35px_rgba(6,182,212,0.2)]">
+      {/* Bottom Center Console: Global Action Commands */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-6 p-4 bg-slate-950/95 backdrop-blur-xl border border-cyan-500/40 rounded-xl shadow-[0_0_35px_rgba(6,182,212,0.2)]">
         <button 
           onClick={() => engineRef.current?.clearCanvas()}
           className="flex items-center gap-2 px-4 py-2 border border-rose-500/40 hover:border-rose-500 rounded-md text-xs text-rose-400 hover:bg-rose-500/10 transition-all uppercase tracking-wider font-bold"
@@ -353,21 +382,14 @@ export default function GestureForgeWorkspace() {
         </button>
         <div className="h-4 w-[1px] bg-slate-700" />
         <p className="text-[10px] text-slate-400 max-w-xs leading-normal">
-          <Sparkles className="inline w-3 h-3 mr-1 text-amber-400" />
-          <b className="text-slate-300">Tony Stark Interface Config:</b> Lift 1 index finger to draw. Bring in both hands simultaneously to rotate & size the central hyper-cube core natively.
+          <Sparkles className="inline w-3 h-3 mr-1 text-amber-400 animate-spin" />
+          <b className="text-slate-300">Stark Core Calibration:</b> Raise 1 index finger to draw. Use both hands to scale/rotate the glowing central hyper-cube target smoothly.
         </p>
       </div>
     </div>
   );
 }
-```
-eof
+
 
 ---
 
-### What I Did:
-1. **Consolidated the modules:** Merged the vector translation math engine (`TwoHandTransformationEngine`), the 3D WebGL renderer (`Engine3D`), and the main workspace React component (`GestureForgeWorkspace`) into a single file.
-2. **Fixed import paths:** Removed any relative imports pointing outside of this file so that it compiles self-contained.
-3. **Structured with Streaming Progress Markers:** Integrated progress flags to facilitate clean step-by-step processing indicators in the compiler UI.
-
-Go ahead and commit this, push to GitHub, and Vercel will complete your build flawlessly!
