@@ -1,10 +1,11 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Shield, Sparkles, Palette, RefreshCw, Zap, Cpu, Camera, Layers } from 'lucide-react';
+import { Shield, Sparkles, Palette, RefreshCw, Cpu, Camera, Layers } from 'lucide-react';
 
-// ==========================================
-// 1. TWO-HAND GESTURE ROTATION & SCALE MATHS
-// ==========================================
+// ============================================================================
+// 1. TWO-HAND GESTURE ROTATION & SCALE MATH ENGINE
+// ============================================================================
 class TwoHandTransformationEngine {
   constructor() {
     this.prevLeft = new THREE.Vector3();
@@ -18,7 +19,7 @@ class TwoHandTransformationEngine {
     this.deltaQuaternion = new THREE.Quaternion();
 
     this.isTrackingActive = false;
-    this.smoothingFactor = 0.25; // Balanced smoothing to absorb web-cam tracking noise
+    this.smoothingFactor = 0.25; // Smooths out web-cam coordinate jitter
     this.minDistanceThreshold = 0.05;
   }
 
@@ -28,7 +29,7 @@ class TwoHandTransformationEngine {
       return;
     }
 
-    // Mirror horizontal axes coordinates for clean, mirrored physical control response
+    // Mirror horizontal axes coordinate variables for intuitive, natural face-to-camera control response
     this.currentLeft.set(
       (leftHandLandmark.x - 0.5) * -10, 
       (leftHandLandmark.y - 0.5) * -6, 
@@ -47,7 +48,7 @@ class TwoHandTransformationEngine {
       return;
     }
 
-    // Measure relative distance delta to apply smooth spatial scale operations
+    // Calculate distance vectors between both hands to handle scale operations
     this.dirPrev.subVectors(this.prevRight, this.prevLeft);
     this.dirCurrent.subVectors(this.currentRight, this.currentLeft);
 
@@ -56,7 +57,7 @@ class TwoHandTransformationEngine {
 
     if (distPrev < this.minDistanceThreshold || distCurrent < this.minDistanceThreshold) return;
 
-    // Apply Lerp-smoothed scale matrix updates
+    // Smoothly interpolate uniform scaling multiplier
     const targetScaleMultiplier = distCurrent / distPrev;
     const newScale = THREE.MathUtils.lerp(
       targetObject.scale.x, 
@@ -66,7 +67,7 @@ class TwoHandTransformationEngine {
     const clampedScale = THREE.MathUtils.clamp(newScale, 0.3, 4.0);
     targetObject.scale.set(clampedScale, clampedScale, clampedScale);
 
-    // Compute relative rotation angle adjustments (Dot and Cross products of hand vectors)
+    // Compute angular rotation (Dot and Cross products of hand vectors)
     this.dirPrev.normalize();
     this.dirCurrent.normalize();
 
@@ -83,7 +84,7 @@ class TwoHandTransformationEngine {
       targetObject.quaternion.premultiply(interpolationQuat);
     }
 
-    // Cache variables forward
+    // Shift coordinates forward
     this.prevLeft.copy(this.currentLeft);
     this.prevRight.copy(this.currentRight);
   }
@@ -93,9 +94,9 @@ class TwoHandTransformationEngine {
   }
 }
 
-// ==========================================
-// 2. WEBGL GRAPHICS AND DRAWING CONTEXT SYSTEM
-// ==========================================
+// ============================================================================
+// 2. THREE.JS 3D WEBGL GRAPHICS AND PAINT ENGINE
+// ============================================================================
 class Engine3D {
   constructor(canvas) {
     this.canvas = canvas;
@@ -119,7 +120,7 @@ class Engine3D {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-    // Futuristic space illumination config
+    // Futuristic space light matrices
     const ambientLight = new THREE.AmbientLight(0x1e1b4b, 0.8);
     this.scene.add(ambientLight);
 
@@ -127,7 +128,7 @@ class Engine3D {
     pointLight.position.set(0, 4, 4);
     this.scene.add(pointLight);
 
-    // Core Holo-Cube target configuration
+    // Centered glowing Holo-Cube geometry configuration
     const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
     const wireframe = new THREE.WireframeGeometry(geometry);
     const material = new THREE.LineBasicMaterial({ color: 0x8b5cf6, linewidth: 2 });
@@ -135,7 +136,7 @@ class Engine3D {
     this.hologramObject = new THREE.LineSegments(wireframe, material);
     this.scene.add(this.hologramObject);
 
-    // Glowing grid array floor reference
+    // Flat floor grid helper
     const gridHelper = new THREE.GridHelper(20, 20, 0x06b6d4, 0x1e293b);
     gridHelper.position.y = -2.5;
     this.scene.add(gridHelper);
@@ -151,14 +152,14 @@ class Engine3D {
       return;
     }
 
-    // Dual-hand coordinates tracking
+    // Mode A: Dual hand manipulation locked on target core
     if (landmarksList.length === 2) {
       this.twoHandEngine.processTwoHandInteraction(landmarksList[0], landmarksList[1], this.hologramObject);
       this.currentLine = null; 
       return;
     }
 
-    // Single hand air-painting interaction
+    // Mode B: Single hand spatial air-painting
     if (landmarksList.length === 1) {
       this.twoHandEngine.resetTrackingState();
       
@@ -211,6 +212,7 @@ class Engine3D {
   }
 
   onWindowResize() {
+    if (!this.camera || !this.renderer) return;
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -221,17 +223,21 @@ class Engine3D {
     if (this.hologramObject) {
       this.hologramObject.rotation.y += 0.003;
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.renderer && this.scene && this.camera) {
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 
   destroy() {
-    this.renderer.dispose();
+    if (this.renderer) {
+      this.renderer.dispose();
+    }
   }
 }
 
-// ==========================================
-// 3. FRONTEND STARK HUD INTERFACE MATRIX
-// ==========================================
+// ============================================================================
+// 3. FRONTEND STARK HUD INTERFACE VIEWPORT
+// ============================================================================
 export default function GestureForgeWorkspace() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -249,14 +255,13 @@ export default function GestureForgeWorkspace() {
   ];
 
   useEffect(() => {
-    // A quick interval to wait for index.html CDN script tags to mount successfully globally
+    // Verifies global browser window CDN script injection readiness
     const checkLibraries = setInterval(() => {
       if (window.Hands && window.Camera) {
         setIsSystemReady(true);
         clearInterval(checkLibraries);
       }
     }, 200);
-
     return () => clearInterval(checkLibraries);
   }, []);
 
@@ -389,7 +394,4 @@ export default function GestureForgeWorkspace() {
     </div>
   );
 }
-
-
----
 
