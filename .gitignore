@@ -1,0 +1,30 @@
+# Dependencies (The absolute heaviest folders - never upload these)
+node_modules/
+jspm_packages/
+web_modules/
+
+# Production Build Output (Auto-generated code created when deploying)
+dist/
+build/
+out/
+
+# Local Environment Variables & Secrets (Crucial for security)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.local
+
+# Operating System System Trash (Keeps your repo clean across Mac/Windows)
+.DS_Store
+Thumbs.db
+*.logs
+*.log
+
+# Editor Settings (Optional, keeps personal VS Code settings out of the repo)
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
