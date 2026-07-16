@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Hands } from '@mediapipe/hands';
-import * as cam from '@mediapipe/camera_utils';
 import { Engine3D } from '../engines/Engine3D';
-import { Shield, Zap, RefreshCw, Sparkles, Palette } from 'lucide-react';
+import { Shield, RefreshCw, Sparkles, Palette } from 'lucide-react';
 
 export default function GestureForgeWorkspace() {
   const videoRef = useRef(null);
@@ -26,7 +24,16 @@ export default function GestureForgeWorkspace() {
       setHudStats(p => ({ ...p, status: 'SYSTEM ACTIVE' }));
     }
 
-    const hands = new Hands({
+    // Reference globally loaded MediaPipe constructors from index.html scripts
+    const HandsLib = window.Hands;
+    const CameraLib = window.Camera;
+
+    if (!HandsLib || !CameraLib) {
+      setHudStats(p => ({ ...p, status: 'ERROR: VISION ENGINE BLOCKED' }));
+      return;
+    }
+
+    const hands = new HandsLib({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
     });
 
@@ -52,7 +59,7 @@ export default function GestureForgeWorkspace() {
 
     let cameraInstance = null;
     if (videoRef.current) {
-      cameraInstance = new cam.Camera(videoRef.current, {
+      cameraInstance = new CameraLib(videoRef.current, {
         onFrame: async () => {
           await hands.send({ image: videoRef.current });
         },
@@ -82,6 +89,7 @@ export default function GestureForgeWorkspace() {
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-10" />
 
       {/* Top Left: Main Diagnostic HUD Panel */}
+      {}
       <div className="absolute top-6 left-6 z-20 w-80 p-5 rounded-lg border border-cyan-500/30 bg-slate-900/70 backdrop-blur-md shadow-[0_0_25px_rgba(6,182,212,0.15)]">
         <div className="flex items-center gap-2 mb-3 text-xs tracking-widest text-cyan-500 font-bold border-b border-cyan-500/20 pb-2">
           <Shield className="w-4 h-4 animate-pulse" />
@@ -95,6 +103,7 @@ export default function GestureForgeWorkspace() {
       </div>
 
       {/* Top Right: Color Controls Overlay */}
+      {}
       <div className="absolute top-6 right-6 z-20 p-4 rounded-lg border border-purple-500/30 bg-slate-900/70 backdrop-blur-md shadow-[0_0_25px_rgba(139,92,246,0.15)]">
         <h3 className="text-xs font-bold text-purple-400 mb-3 flex items-center gap-2 tracking-wider">
           <Palette className="w-4 h-4" /> NEON COATINGS
@@ -118,6 +127,7 @@ export default function GestureForgeWorkspace() {
       </div>
 
       {/* Bottom Center: System Action Array */}
+      {}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-6 p-4 bg-slate-900/80 backdrop-blur-xl border border-cyan-500/40 rounded-xl shadow-[0_0_35px_rgba(6,182,212,0.2)]">
         <button 
           onClick={() => engineRef.current?.clearCanvas()}
